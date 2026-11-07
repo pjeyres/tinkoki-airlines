@@ -127,6 +127,8 @@ flight.assist = settings.assist;
 const sound = new Sound();
 sound.muted = settings.muted;
 const touch = new TouchControls();
+// (iPhones only count some events as a tap that may start sound, so listen for several)
+for (const type of ['pointerdown', 'pointerup', 'touchend', 'keydown']) window.addEventListener(type, () => sound.resume(), { capture: true });
 const hud = new Hud();
 const search = makeSearch(scene, mode);
 

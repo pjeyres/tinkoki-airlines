@@ -33,6 +33,9 @@ export class Sound {
     if (this.ctx) return;
     const Ctx = window.AudioContext || window.webkitAudioContext;
     if (!context && !Ctx) return;
+    // iPhones silence web audio when the ring/silent switch is on silent,
+    // unless the page says it's playing sound on purpose, like a game or video
+    if (!context && navigator.audioSession) navigator.audioSession.type = 'playback';
     this.ctx = context ?? new Ctx();
     const ctx = this.ctx;
 
@@ -120,6 +123,14 @@ export class Sound {
     this.reverbSend = ctx.createGain();
     this.reverbSend.gain.value = 0.35;
     this.reverbSend.connect(reverb).connect(this.master);
+  }
+
+  // Phones suspend audio when locked, on a call or after switching apps, and
+  // only let it restart from a tap or key press
+  resume() {
+    if (this.ctx?.state === 'suspended' || this.ctx?.state === 'interrupted') {
+      this.ctx.resume().catch(() => {});
+    }
   }
 
   setMuted(muted) {
