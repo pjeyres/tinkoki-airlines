@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tinkoki Airlines</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <script>window.CESIUM_BASE_URL = 'https://cdn.jsdelivr.net/npm/cesium@1.146.0/Build/Cesium/';</script>
+  <script src="https://cdn.jsdelivr.net/npm/cesium@1.146.0/Build/Cesium/Cesium.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/cesium@1.146.0/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.0/examples/jsm/"
+      }
+    }
+  </script>
+  <link href="styles.css" rel="stylesheet">
+</head>
+<body>
+  <div id="app">
+    <div id="globe"></div>
+
+    <!-- Speech bubble that follows Loki's head -->
+    <div id="bubble-anchor"><div id="bubble">WOOF!</div></div>
+
+    <div id="hud" hidden>
+      <header class="top-left glass">
+        <div class="brand"><span class="paw">🐾</span> Tinkoki Airlines <span id="flight-chip" class="flight">LK-1</span></div>
+        <div class="sub"><span id="status">Flying</span> · <span id="coords">—</span></div>
+      </header>
+
+      <div class="top-center">
+        <canvas id="compass"></canvas>
+        <div id="hdg" class="mono">000°</div>
+      </div>
+
+      <div class="top-right">
+        <form id="search-form" class="glass search" autocomplete="off">
+          <input id="search" type="search" placeholder="Fly anywhere… (T)" aria-label="Search for a place to fly to">
+        </form>
+        <ul id="results" class="glass results" hidden></ul>
+        <div class="buttons">
+          <button id="btn-places" class="glass icon" title="Destinations" aria-label="Destinations">🌍</button>
+          <button id="btn-settings" class="glass icon" title="Settings" aria-label="Settings">⚙︎</button>
+          <button id="btn-help" class="glass icon" title="Controls (H)" aria-label="Controls">?</button>
+        </div>
+      </div>
+
+      <div class="bottom-left glass instruments">
+        <canvas id="attitude"></canvas>
+        <div class="readouts">
+          <div class="readout"><label>Speed</label><div><span id="spd" class="mono big">0</span><small>km/h</small></div><small id="spd-kt" class="mono dim">0 kt</small></div>
+          <div class="readout"><label>Altitude</label><div><span id="alt" class="mono big">0</span><small>m</small></div><small id="agl" class="mono dim">AGL —</small></div>
+          <div class="readout"><label>Climb</label><div><span id="vs" class="mono">▲ 0 m/s</span></div></div>
+        </div>
+      </div>
+
+      <div class="bottom-right glass gauges">
+        <div class="balls">
+          <div class="ball-icon" aria-hidden="true"></div>
+          <div>
+            <div><span id="score" class="mono big">0</span><small>fetched</small></div>
+            <small class="dim">nearest <span id="ball-dist" class="mono">—</span></small>
+          </div>
+        </div>
+        <div class="bars">
+          <div class="throttle">
+            <label>Thr</label>
+            <div class="vbar"><div id="thr-fill"></div></div>
+            <small id="thr" class="mono">25%</small>
+          </div>
+          <div id="zoomies" class="zoomies">
+            <label>Zoomies</label>
+            <div class="hbar"><div id="zoom-fill"></div></div>
+            <small class="dim">hold Space</small>
+          </div>
+        </div>
+      </div>
+
+      <div id="hints" class="hints glass">
+        <kbd>W</kbd><kbd>S</kbd> pitch · <kbd>A</kbd><kbd>D</kbd> bank · <kbd>R</kbd><kbd>F</kbd> throttle · <kbd>Space</kbd> zoomies · <kbd>B</kbd> <span id="hint-voice">bark</span> · <kbd>C</kbd> camera · <kbd>G</kbd> giant · <kbd>H</kbd> help
+      </div>
+    </div>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+
+    <div id="paused" class="overlay-msg" hidden>
+      <div class="glass card-sm"><h2>Paused</h2><p>Drag to look around <span class="pet-name">Loki</span> · press <kbd>P</kbd> to fly on</p></div>
+    </div>
+    <div id="loading" class="overlay-msg" hidden>
+      <div class="glass card-sm"><div class="spinner">🐾</div><h2>Sniffing out <span id="loading-name"></span>…</h2><p>Loading the world around <span class="pet-name">Loki</span></p></div>
+    </div>
+
+    <!-- Destinations -->
+    <section id="places" class="panel glass" hidden>
+      <div class="panel-head"><h2>Destinations</h2><button class="close" data-close aria-label="Close">✕</button></div>
+      <p class="dim">Or type any city, landmark or address in the search box.</p>
+      <ul id="place-list" class="place-list"></ul>
+    </section>
+
+    <!-- Settings -->
+    <section id="settings" class="panel glass" hidden>
+      <div class="panel-head"><h2>Settings</h2><button class="close" data-close aria-label="Close">✕</button></div>
+      <h3>World</h3>
+      <p class="dim">Now showing: <strong id="mode-name"></strong></p>
+      <label class="field">Map style
+        <select id="opt-mode">
+          <option value="google">Google Photorealistic 3D Tiles (best)</option>
+          <option value="ion">Cesium World Terrain + Bing imagery + OSM buildings</option>
+          <option value="free">Esri satellite imagery + terrain (no token)</option>
+        </select>
+      </label>
+      <label class="field">Cesium ion access token
+        <input id="opt-token" type="password" placeholder="Paste your token" spellcheck="false">
+      </label>
+      <p class="dim small">Get a free token at <a href="https://ion.cesium.com/tokens" target="_blank" rel="noopener">ion.cesium.com</a>. It's stored only in this browser.</p>
+      <button id="save-world" class="primary">Save &amp; reload world</button>
+      <h3>Pilot</h3>
+      <label class="field">Who's flying?
+        <select id="opt-pet">
+          <option value="loki">🐕 Loki, golden retriever (fetches tennis balls)</option>
+          <option value="tinker">🐈 Tinker, tabby cat (flies free)</option>
+        </select>
+      </label>
+      <h3>Flying</h3>
+      <label class="check"><input id="opt-invert" type="checkbox"> Arcade pitch (W / ↑ climbs)</label>
+      <label class="check"><input id="opt-assist" type="checkbox"> Auto-level assist</label>
+      <label class="check"><input id="opt-sound" type="checkbox"> Sound</label>
+      <label class="check"><input id="opt-sharp" type="checkbox"> Sharp retina rendering (slower)</label>
+    </section>
+
+    <!-- Help -->
+    <section id="help" class="panel glass" hidden>
+      <div class="panel-head"><h2>How to fly <span class="pet-name">Loki</span></h2><button class="close" data-close aria-label="Close">✕</button></div>
+      <table class="keys">
+        <tr><td><kbd>W</kbd> / <kbd>↑</kbd></td><td>Nose down (dive)</td></tr>
+        <tr><td><kbd>S</kbd> / <kbd>↓</kbd></td><td>Nose up (climb)</td></tr>
+        <tr><td><kbd>A</kbd><kbd>D</kbd> / <kbd>←</kbd><kbd>→</kbd></td><td>Bank left / right (turns)</td></tr>
+        <tr><td><kbd>Q</kbd><kbd>E</kbd></td><td>Yaw (rudder)</td></tr>
+        <tr><td><kbd>R</kbd> / <kbd>Shift</kbd></td><td>Throttle up</td></tr>
+        <tr><td><kbd>F</kbd> / <kbd>X</kbd></td><td>Throttle down</td></tr>
+        <tr><td><kbd>Space</kbd></td><td>Zoomies boost</td></tr>
+        <tr><td><kbd>B</kbd></td><td>Bark (Loki) or meow (Tinker)</td></tr>
+        <tr><td><kbd>C</kbd></td><td>Camera: chase, locked, pilot's eyes, fly-by</td></tr>
+        <tr><td>Mouse drag / wheel</td><td>Look around / zoom</td></tr>
+        <tr><td><kbd>G</kbd></td><td>Giant mode</td></tr>
+        <tr><td><kbd>T</kbd></td><td>Search for a place</td></tr>
+        <tr><td><kbd>P</kbd> · <kbd>M</kbd></td><td>Pause · mute</td></tr>
+      </table>
+      <p class="dim small">Flying as Loki? Fly through 🎾 tennis balls to fetch them; the yellow dot on the compass points to the nearest one. Tinker has no chores and just flies free. Land by flying gently into the ground, then run around with the throttle. Gamepads work too.</p>
+      <p class="dim small">Loki's bark: recording by <a href="https://commons.wikimedia.org/wiki/File:Barking_of_a_dog.ogg" target="_blank" rel="noopener">Amada44</a> on Wikimedia Commons, <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener">CC BY-SA 3.0</a>, trimmed and pitched down.</p>
+    </section>
+
+    <!-- Welcome: boarding pass -->
+    <div id="welcome">
+      <div class="pass">
+        <div class="pass-main">
+          <div class="pass-brand"><span class="paw">🐾</span> TINKOKI AIRLINES <span class="pass-type">Boarding pass</span></div>
+          <div class="pilot-pick" role="group" aria-label="Choose your pilot">
+            <button type="button" data-pet="loki" aria-pressed="true"><span>🐕</span><strong>Loki</strong><small>Golden retriever · fetches balls</small></button>
+            <button type="button" data-pet="tinker" aria-pressed="false"><span>🐈</span><strong>Tinker</strong><small>Tabby cat · flies free</small></button>
+          </div>
+          <div class="route">
+            <div><small>From</small><strong>LWS</strong><span>Lewes</span></div>
+            <div id="pass-emoji" class="plane">🐕</div>
+            <div><small>To</small><strong>ANY</strong><span>Anywhere on Earth</span></div>
+          </div>
+          <div class="pass-grid">
+            <div><small>Passenger</small><strong id="pass-name">LOKI</strong></div>
+            <div><small>Breed</small><strong id="pass-breed">Golden Retriever</strong></div>
+            <div><small>Class</small><strong id="pass-class">Very Good Boy</strong></div>
+            <div><small>Flight</small><strong id="pass-flight">LK-1</strong></div>
+            <div><small>Seat</small><strong>Pilot</strong></div>
+            <div><small>Snacks</small><strong id="pass-snacks">Unlimited</strong></div>
+          </div>
+          <p id="token-hint" class="hint" hidden>Flying on free Esri maps. For photorealistic 3D cities, add a free Cesium ion token in Settings ⚙︎ once you're aboard.</p>
+          <button id="board" class="primary board" disabled>Fetching pilots…</button>
+        </div>
+        <div class="pass-stub">
+          <small>Pre-flight briefing</small>
+          <ul>
+            <li><kbd>S</kbd> climb · <kbd>W</kbd> dive</li>
+            <li><kbd>A</kbd> <kbd>D</kbd> bank to turn</li>
+            <li><kbd>R</kbd> <kbd>F</kbd> throttle</li>
+            <li><kbd>Space</kbd> zoomies</li>
+            <li><kbd>B</kbd> bark/meow · <kbd>C</kbd> camera</li>
+            <li id="brief-goal">🎾 fetch the tennis balls</li>
+          </ul>
+          <div class="barcode" aria-hidden="true"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
