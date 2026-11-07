@@ -2,7 +2,15 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#101a33">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Tinkoki">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <title>Tinkoki Airlines</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -30,7 +38,7 @@
     <div id="hud" hidden>
       <header class="top-left glass">
         <div class="brand"><span class="paw">🐾</span> Tinkoki Airlines <span id="flight-chip" class="flight">LK-1</span></div>
-        <div class="sub"><span id="status">Flying</span> · <span id="coords">—</span></div>
+        <div class="sub"><span id="status">Flying</span><span class="coords"> · <span id="coords">—</span></span></div>
       </header>
 
       <div class="top-center">
@@ -44,6 +52,8 @@
         </form>
         <ul id="results" class="glass results" hidden></ul>
         <div class="buttons">
+          <button id="btn-search" class="glass icon touch-only" title="Search" aria-label="Search for a place">🔍</button>
+          <button id="btn-pause" class="glass icon touch-only" title="Pause" aria-label="Pause">⏸</button>
           <button id="btn-places" class="glass icon" title="Destinations" aria-label="Destinations">🌍</button>
           <button id="btn-settings" class="glass icon" title="Settings" aria-label="Settings">⚙︎</button>
           <button id="btn-help" class="glass icon" title="Controls (H)" aria-label="Controls">?</button>
@@ -81,6 +91,21 @@
         </div>
       </div>
 
+      <!-- Phones and tablets -->
+      <div id="touch" class="touch-controls">
+        <div id="stick" class="stick" aria-label="Flight stick: drag to steer"><div id="knob" class="knob"></div></div>
+        <div class="actions">
+          <button id="t-zoom" class="t-btn big" aria-label="Zoomies (hold)"><i id="t-zoom-fill"></i><span>⚡</span><small>Zoomies</small></button>
+          <button id="t-bark" class="t-btn" aria-label="Bark"><span class="pet-emoji">🐕</span><small id="t-bark-label">Woof</small></button>
+          <div class="t-small">
+            <button id="t-level" class="t-btn small" aria-label="Recentre tilt" hidden>⟲</button>
+            <button id="t-cam" class="t-btn small" aria-label="Change camera">🎥</button>
+            <button id="t-giant" class="t-btn small" aria-label="Giant mode"><b>XL</b></button>
+          </div>
+        </div>
+        <div id="t-thr" class="t-thr" aria-label="Throttle: slide up to go faster"><div id="t-thr-fill"></div><small>Thr</small></div>
+      </div>
+
       <div id="hints" class="hints glass">
         <kbd>W</kbd><kbd>S</kbd> pitch · <kbd>A</kbd><kbd>D</kbd> bank · <kbd>R</kbd><kbd>F</kbd> throttle · <kbd>Space</kbd> zoomies · <kbd>B</kbd> <span id="hint-voice">bark</span> · <kbd>C</kbd> camera · <kbd>G</kbd> giant · <kbd>H</kbd> help
       </div>
@@ -89,7 +114,7 @@
     <div id="toast" role="status" aria-live="polite"></div>
 
     <div id="paused" class="overlay-msg" hidden>
-      <div class="glass card-sm"><h2>Paused</h2><p>Drag to look around <span class="pet-name">Loki</span> · press <kbd>P</kbd> to fly on</p></div>
+      <div class="glass card-sm"><h2>Paused</h2><p class="keys-only">Drag to look around <span class="pet-name">Loki</span> · press <kbd>P</kbd> to fly on</p><p class="touch-only">Drag to look around <span class="pet-name">Loki</span> · tap here to fly on</p></div>
     </div>
     <div id="loading" class="overlay-msg" hidden>
       <div class="glass card-sm"><div class="spinner">🐾</div><h2>Sniffing out <span id="loading-name"></span>…</h2><p>Loading the world around <span class="pet-name">Loki</span></p></div>
@@ -127,7 +152,8 @@
         </select>
       </label>
       <h3>Flying</h3>
-      <label class="check"><input id="opt-invert" type="checkbox"> Arcade pitch (W / ↑ climbs)</label>
+      <label class="check touch-only"><input id="opt-tilt" type="checkbox"> Tilt to steer</label>
+      <label class="check"><input id="opt-invert" type="checkbox"> Arcade pitch (<span class="keys-only">W / ↑</span><span class="touch-only">pushing the stick</span> climbs)</label>
       <label class="check"><input id="opt-assist" type="checkbox"> Auto-level assist</label>
       <label class="check"><input id="opt-sound" type="checkbox"> Sound</label>
       <label class="check"><input id="opt-sharp" type="checkbox"> Sharp retina rendering (slower)</label>
@@ -136,7 +162,18 @@
     <!-- Help -->
     <section id="help" class="panel glass" hidden>
       <div class="panel-head"><h2>How to fly <span class="pet-name">Loki</span></h2><button class="close" data-close aria-label="Close">✕</button></div>
-      <table class="keys">
+      <table class="keys touch-only">
+        <tr><td>Left stick</td><td>Pull back to climb, push to dive, sideways to bank and turn</td></tr>
+        <tr><td>Thr slider</td><td>Slide up to go faster</td></tr>
+        <tr><td>⚡ (hold)</td><td>Zoomies boost</td></tr>
+        <tr><td>🐕 / 🐈</td><td>Bark or meow</td></tr>
+        <tr><td>🎥</td><td>Camera: chase, locked, pilot's eyes, fly-by</td></tr>
+        <tr><td>XL</td><td>Giant mode</td></tr>
+        <tr><td>Drag / pinch</td><td>Look around / zoom</td></tr>
+        <tr><td>Tilt to steer</td><td>Turn it on in Settings ⚙︎; ⟲ recentres</td></tr>
+        <tr><td>🔍 · ⏸</td><td>Search for a place · pause</td></tr>
+      </table>
+      <table class="keys keys-only">
         <tr><td><kbd>W</kbd> / <kbd>↑</kbd></td><td>Nose down (dive)</td></tr>
         <tr><td><kbd>S</kbd> / <kbd>↓</kbd></td><td>Nose up (climb)</td></tr>
         <tr><td><kbd>A</kbd><kbd>D</kbd> / <kbd>←</kbd><kbd>→</kbd></td><td>Bank left / right (turns)</td></tr>
@@ -151,7 +188,7 @@
         <tr><td><kbd>T</kbd></td><td>Search for a place</td></tr>
         <tr><td><kbd>P</kbd> · <kbd>M</kbd></td><td>Pause · mute</td></tr>
       </table>
-      <p class="dim small">Flying as Loki? Fly through 🎾 tennis balls to fetch them; the yellow dot on the compass points to the nearest one. Tinker has no chores and just flies free. Land by flying gently into the ground, then run around with the throttle. Gamepads work too.</p>
+      <p class="dim small">Flying as Loki? Fly through 🎾 tennis balls to fetch them; the yellow dot on the compass points to the nearest one. Tinker has no chores and just flies free. Land by flying gently into the ground, then run around with the throttle. Gamepads work too. On a phone, add Tinkoki Airlines to your home screen for full-screen flying.</p>
       <p class="dim small">Loki's bark: recording by <a href="https://commons.wikimedia.org/wiki/File:Barking_of_a_dog.ogg" target="_blank" rel="noopener">Amada44</a> on Wikimedia Commons, <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener">CC BY-SA 3.0</a>, trimmed and pitched down.</p>
     </section>
 
@@ -182,13 +219,21 @@
         </div>
         <div class="pass-stub">
           <small>Pre-flight briefing</small>
-          <ul>
+          <ul class="touch-only">
+            <li>🕹️ left stick: pull back to climb</li>
+            <li>↔️ stick sideways to bank and turn</li>
+            <li>⬆️ slide Thr up to speed up</li>
+            <li>⚡ hold for zoomies</li>
+            <li>📱 best held sideways</li>
+            <li class="brief-goal">🎾 fetch the tennis balls</li>
+          </ul>
+          <ul class="keys-only">
             <li><kbd>S</kbd> climb · <kbd>W</kbd> dive</li>
             <li><kbd>A</kbd> <kbd>D</kbd> bank to turn</li>
             <li><kbd>R</kbd> <kbd>F</kbd> throttle</li>
             <li><kbd>Space</kbd> zoomies</li>
             <li><kbd>B</kbd> bark/meow · <kbd>C</kbd> camera</li>
-            <li id="brief-goal">🎾 fetch the tennis balls</li>
+            <li class="brief-goal">🎾 fetch the tennis balls</li>
           </ul>
           <div class="barcode" aria-hidden="true"></div>
         </div>

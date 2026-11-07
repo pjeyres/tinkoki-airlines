@@ -4,6 +4,7 @@ import { Flight, CRUISE_MAX } from './flight.js';
 import { Hud } from './hud.js';
 import { Sound } from './audio.js';
 import { DESTINATIONS, HOME_AIRPORT, makeSearch } from './places.js';
+import { TouchControls } from './touch.js';
 
 const C = window.Cesium;
 const V = C.Cartesian3;
@@ -35,7 +36,21 @@ const settings = {
   assist: store.get('assist', true),
   muted: store.get('muted', false),
   sharp: store.get('sharp', false),
+  tilt: store.get('tilt', false),
 };
+
+// Phones and tablets get on-screen controls; a touch on any device switches them on
+let isTouch = matchMedia('(pointer: coarse)').matches;
+document.body.classList.toggle('touch', isTouch);
+window.addEventListener('pointerdown', (e) => {
+  if (e.pointerType === 'touch' && !isTouch) {
+    isTouch = true;
+    document.body.classList.add('touch');
+    hud.resize();
+  }
+}, { capture: true });
+// The same tip in keyboard or touch words
+const tip = (keys, touchWords) => (isTouch ? touchWords : keys);
 // Without a Cesium ion token we fall back to free Esri imagery and terrain
 const mode = settings.token && settings.mode !== 'free' ? settings.mode : 'free';
 
@@ -54,7 +69,7 @@ const viewerOptions = {
   infoBox: false,
   selectionIndicator: false,
   scene3DOnly: true,
-  msaaSamples: 4,
+  msaaSamples: isTouch ? 2 : 4,
 };
 if (mode === 'free') {
   viewerOptions.baseLayer = C.ImageryLayer.fromProviderAsync(
@@ -78,6 +93,8 @@ scene.globe.depthTestAgainstTerrain = true;
 scene.fog.enabled = true;
 scene.skyAtmosphere.show = true;
 viewer.useBrowserRecommendedResolution = !settings.sharp;
+// Phones: slightly coarser terrain and tiles keep the frame rate (and battery) up
+if (isTouch) scene.globe.maximumScreenSpaceError = 3;
 camera.frustum.fov = C.Math.toRadians(62);
 
 let tileset = null; // photorealistic tiles or OSM buildings
@@ -86,6 +103,7 @@ async function loadTiles() {
   try {
     if (mode === 'google') {
       tileset = await C.createGooglePhotorealistic3DTileset({ onlyUsingWithGoogleGeocoder: true });
+      if (isTouch) tileset.maximumScreenSpaceError = 24;
       scene.globe.show = false;
       scene.primitives.add(tileset);
     } else if (mode === 'ion') {
@@ -108,6 +126,7 @@ const flight = new Flight();
 flight.assist = settings.assist;
 const sound = new Sound();
 sound.muted = settings.muted;
+const touch = new TouchControls();
 const hud = new Hud();
 const search = makeSearch(scene, mode);
 
@@ -185,7 +204,10 @@ function showPetText() {
   $('pass-flight').textContent = pet.flight;
   $('pass-snacks').textContent = pet.snacks;
   $('pass-emoji').textContent = pet.emoji;
-  $('brief-goal').textContent = pet.goal;
+  document.querySelectorAll('.brief-goal').forEach((el) => { el.textContent = pet.goal; });
+  document.querySelectorAll('.pet-emoji').forEach((el) => { el.textContent = pet.emoji; });
+  $('t-bark-label').textContent = pet.voice === 'meow' ? 'Meow' : 'Woof';
+  $('t-bark').setAttribute('aria-label', pet.voice === 'meow' ? 'Meow' : 'Bark');
   $('flight-chip').textContent = pet.flight;
   $('hint-voice').textContent = pet.voice;
   $('opt-pet').value = pet.id;
@@ -490,16 +512,40 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keyup', (e) => keys.delete(e.code));
 window.addEventListener('blur', () => keys.clear());
 
+// Drag to look around the pilot, pinch (or the wheel) to zoom
 const canvas = scene.canvas;
+const pointers = new Map(); // pointerId -> last { x, y }
+let pinchDist = 0;
+const spread = () => {
+  const [a, b] = [...pointers.values()];
+  return Math.hypot(a.x - b.x, a.y - b.y);
+};
 canvas.addEventListener('pointerdown', (e) => {
-  dragging = true;
   canvas.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  dragging = true;
+  if (pointers.size === 2) pinchDist = spread();
 });
-canvas.addEventListener('pointerup', () => { dragging = false; });
+const release = (e) => {
+  pointers.delete(e.pointerId);
+  dragging = pointers.size > 0;
+};
+canvas.addEventListener('pointerup', release);
+canvas.addEventListener('pointercancel', release);
 canvas.addEventListener('pointermove', (e) => {
-  if (!dragging) return;
-  orbitYaw -= e.movementX * 0.006;
-  orbitPitch = C.Math.clamp(orbitPitch + e.movementY * 0.004, -1.2, 1.2);
+  const p = pointers.get(e.pointerId);
+  if (!p) return;
+  const dx = e.clientX - p.x, dy = e.clientY - p.y;
+  p.x = e.clientX;
+  p.y = e.clientY;
+  if (pointers.size === 2) {
+    const d = spread();
+    if (pinchDist > 0 && d > 0) camDist = C.Math.clamp(camDist * pinchDist / d, 2.5, 80);
+    pinchDist = d;
+    return;
+  }
+  orbitYaw -= dx * 0.006;
+  orbitPitch = C.Math.clamp(orbitPitch + dy * 0.004, -1.2, 1.2);
 });
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
@@ -515,7 +561,9 @@ function readInput(dt) {
     yaw: k('KeyE') - k('KeyQ'),
   };
   let throttle = k('KeyR', 'ShiftLeft', 'ShiftRight') - k('KeyF', 'KeyX');
-  let boost = keys.has('Space');
+  let boost = keys.has('Space') || touchBoost;
+  target.pitch += touch.pitch * pitchSign;
+  target.roll += touch.roll;
 
   const pad = navigator.getGamepads?.()[0];
   if (pad) {
@@ -573,6 +621,7 @@ function cycleCamera() {
 function togglePause() {
   paused = !paused;
   $('paused').hidden = !paused;
+  $('btn-pause').textContent = paused ? '▶' : '⏸';
 }
 
 function toggleMute() {
@@ -587,7 +636,7 @@ function toggleGiant() {
   const giant = flight.scale === 1;
   flight.scale = giant ? 15 : 1;
   camOffset = null;
-  toast(giant ? `GIANT ${pet.name.toUpperCase()}! ${pet.emoji} (press G to shrink)` : `Regular-sized ${pet.name}`, 1800);
+  toast(giant ? `GIANT ${pet.name.toUpperCase()}! ${pet.emoji} (${tip('press G', 'tap XL')} to shrink)` : `Regular-sized ${pet.name}`, 1800);
 }
 
 let toastTimer = null;
@@ -648,7 +697,10 @@ function finishLoading() {
 }
 
 function takeoffHint() {
-  return `Paws on the ground: hold R to run, then ${settings.invertPitch ? 'W / ↑' : 'S / ↓'} to take off`;
+  return tip(
+    `Paws on the ground: hold R to run, then ${settings.invertPitch ? 'W / ↑' : 'S / ↓'} to take off`,
+    `Paws on the ground: slide Thr up to run, then ${settings.invertPitch ? 'push' : 'pull'} the stick to take off`,
+  );
 }
 
 // ---------------------------------------------------------------- camera
@@ -811,7 +863,8 @@ function showEvents() {
       $('app').classList.add('shake');
     } else if (ev === 'land' && flight.speed > 5) {
       // Skip the tip when just settling onto the runway
-      toast(`Paws down! Hold ${settings.invertPitch ? 'W / ↑' : 'S / ↓'} with some speed to take off again`, 2600);
+      const climb = tip(`hold ${settings.invertPitch ? 'W / ↑' : 'S / ↓'}`, `${settings.invertPitch ? 'push' : 'pull'} the stick`);
+      toast(`Paws down! ${climb[0].toUpperCase()}${climb.slice(1)} with some speed to take off again`, 2600);
     }
   }
   flight.events.length = 0;
@@ -825,6 +878,7 @@ function formatDist(m) {
 function closePanels() {
   for (const id of ['places', 'settings', 'help']) $(id).hidden = true;
   $('results').hidden = true;
+  document.querySelector('.top-right').classList.remove('search-open');
 }
 function togglePanel(id) {
   const open = $(id).hidden;
@@ -833,6 +887,13 @@ function togglePanel(id) {
 }
 
 $('btn-places').addEventListener('click', () => togglePanel('places'));
+$('btn-pause').addEventListener('click', togglePause);
+$('paused').addEventListener('click', togglePause);
+$('btn-search').addEventListener('click', () => {
+  const open = document.querySelector('.top-right').classList.toggle('search-open');
+  if (open) $('search').focus();
+  else $('search').blur();
+});
 $('btn-settings').addEventListener('click', () => togglePanel('settings'));
 $('btn-help').addEventListener('click', () => togglePanel('help'));
 document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', closePanels));
@@ -891,6 +952,7 @@ $('opt-invert').checked = settings.invertPitch;
 $('opt-assist').checked = settings.assist;
 $('opt-sound').checked = !settings.muted;
 $('opt-sharp').checked = settings.sharp;
+$('opt-tilt').checked = settings.tilt;
 $('opt-invert').addEventListener('change', (e) => { settings.invertPitch = e.target.checked; store.set('invertPitch', settings.invertPitch); });
 $('opt-assist').addEventListener('change', (e) => { settings.assist = flight.assist = e.target.checked; store.set('assist', settings.assist); });
 $('opt-sound').addEventListener('change', (e) => { if (e.target.checked === settings.muted) toggleMute(); });
@@ -899,6 +961,42 @@ $('opt-sharp').addEventListener('change', (e) => {
   store.set('sharp', settings.sharp);
   viewer.useBrowserRecommendedResolution = !settings.sharp;
 });
+// Tilt steering. iPhones ask permission, which has to come from a tap
+async function setTilt(on) {
+  try {
+    if (on) await touch.enableTilt();
+    else touch.disableTilt();
+  } catch (err) {
+    on = false;
+    toast(`Tilt steering isn’t available: ${err.message ?? err}`, 3000);
+  }
+  settings.tilt = on;
+  store.set('tilt', on);
+  $('opt-tilt').checked = on;
+  $('t-level').hidden = !on;
+  if (on && started) toast('Tilt to steer: hold it how you like, then ⟲ to recentre', 2600);
+}
+$('opt-tilt').addEventListener('click', (e) => setTilt(e.target.checked));
+
+// On-screen flight controls
+let touchBoost = false;
+touch.bindStick($('stick'), $('knob'));
+touch.bindSlider($('t-thr'), (v) => {
+  flight.throttle = v;
+  $('t-thr-fill').style.height = `${v * 100}%`;
+});
+touch.bindHold($('t-zoom'), (held) => { touchBoost = held; });
+$('t-bark').addEventListener('click', () => bark(2));
+$('t-cam').addEventListener('click', cycleCamera);
+$('t-giant').addEventListener('click', toggleGiant);
+$('t-level').addEventListener('click', () => {
+  touch.recenter();
+  toast('Tilt recentred', 900);
+});
+// Stop the page scrolling, zooming or selecting text under busy thumbs
+document.addEventListener('gesturestart', (e) => e.preventDefault());
+$('touch').addEventListener('contextmenu', (e) => e.preventDefault());
+
 $('save-world').addEventListener('click', () => {
   const token = $('opt-token').value.trim();
   const chosen = $('opt-mode').value;
@@ -921,6 +1019,8 @@ function board() {
   sound.start();
   $('welcome').hidden = true;
   $('hud').hidden = false;
+  if (isTouch) goFullScreen();
+  if (settings.tilt) setTilt(true);
   hud.resize();
   orbitYaw = 0;
   bark(2);
@@ -928,6 +1028,16 @@ function board() {
   setTimeout(() => $('hints').classList.add('faded'), 30000);
 }
 $('board').addEventListener('click', board);
+
+// Android can go full screen and stay sideways; iPhones need the home-screen app for that
+async function goFullScreen() {
+  try {
+    if (!document.fullscreenElement) await document.documentElement.requestFullscreen?.({ navigationUI: 'hide' });
+    await screen.orientation?.lock?.('landscape');
+  } catch {
+    // Not supported here: carry on in the browser window
+  }
+}
 document.querySelectorAll('[data-pet]').forEach((b) => b.addEventListener('click', () => setPet(b.dataset.pet)));
 $('opt-pet').addEventListener('change', (e) => setPet(e.target.value));
 showPetText();
@@ -944,4 +1054,4 @@ if (mode === 'free') $('token-hint').hidden = false;
 })();
 
 // Handy for poking at things from the browser console
-window.tinkokiAirlines = { viewer, flight, teleport, bark, setPet };
+window.tinkokiAirlines = { viewer, flight, teleport, bark, setPet, touch };

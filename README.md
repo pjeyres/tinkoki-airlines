@@ -13,6 +13,8 @@ python3 serve.py
 
 Then open http://localhost:8642. It runs in the browser and needs no install or build step. Cesium and three.js load from a CDN.
 
+It's live at https://pjeyres.github.io/tinkoki-airlines/ (GitHub Pages republishes each push to `main`).
+
 ## Map styles
 
 | Style | Needs | What you get |
@@ -43,15 +45,32 @@ As Loki, fly through 🎾 tennis balls to fetch them. The yellow dot on the comp
 
 Gamepads work too: left stick to fly, triggers for throttle, X for zoomies, A to bark.
 
+### On a phone or tablet
+
+On-screen controls appear on touch screens. It plays best held sideways.
+
+| Control | Action |
+| --- | --- |
+| Left stick | Pull back to climb, push to dive, sideways to bank |
+| Thr slider | Slide up to go faster |
+| ⚡ (hold) | Zoomies |
+| 🐕 / 🐈 | Bark or meow |
+| 🎥 · XL | Camera · giant mode |
+| Drag · pinch | Look around · zoom |
+
+Settings ⚙︎ has **Tilt to steer**, which steers by tilting the phone like a steering wheel, with ⟲ to recentre. Add the site to your home screen (Share → Add to Home Screen on iPhone) to fly full screen.
+
 ## Files
 
 - `js/loki.js` and `js/tinker.js` build the pilots from simple shapes with three.js (helpers in `js/shapes.js`)
 - `js/pets.js` holds each pilot's settings: size, camera, voice, animation and whether balls appear
 - `js/flight.js` contains the arcade flight model (works on a round Earth and allows loops and rolls)
 - `js/main.js` sets up the Cesium globe, camera, ground collision, tennis balls and UI
+- `js/touch.js` handles the on-screen stick, throttle, buttons and tilt steering
 - `js/hud.js` draws the attitude indicator, compass and readouts
 - `js/audio.js` plays Loki's bark from the recording in `sounds/`, and synthesises the wind and Tinker's meow
 - `js/places.js` holds the destinations list and place search
+- `manifest.webmanifest` and `icons/` let phones install it as a full-screen home-screen app
 
 ## Why CesiumJS instead of Cesium for Unreal
 

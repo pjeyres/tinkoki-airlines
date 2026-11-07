@@ -186,13 +186,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* ------------------------------------------------------------- boarding pass */
 #welcome {
-  position: absolute; inset: 0; display: grid; place-items: center; padding: 16px;
+  position: absolute; inset: 0; display: flex; overflow-y: auto; padding: 16px;
   background: radial-gradient(ellipse at center, rgba(8, 12, 26, .25), rgba(8, 12, 26, .7));
 }
 .pass {
   display: flex; width: min(760px, 100%); background: var(--paper); color: var(--ink);
   border-radius: 20px; overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,.5);
   animation: pass-in .6s cubic-bezier(.2,.9,.3,1.2);
+  margin: auto; /* centred, but scrolls rather than clipping on short screens */
 }
 @keyframes pass-in { from { transform: translateY(30px) rotate(-1.5deg); } }
 .pass-main { flex: 1; padding: 22px 26px; }
@@ -252,3 +253,137 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* After the base #toast rule so it wins: keep toasts clear of the relocated hints bar */
 @media (max-width: 1240px) { #toast { top: 124px; } }
+
+/* ------------------------------------------------------------- phones and tablets */
+body:not(.touch) .touch-only, body:not(.touch) .touch-controls { display: none !important; }
+body.touch .keys-only, body.touch .hints { display: none !important; }
+
+:root {
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+}
+#globe, .touch-controls * { touch-action: none; }
+.touch-controls { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+#hud > .touch-controls { position: absolute; inset: 0; pointer-events: none; }
+.touch-controls > * { pointer-events: auto; }
+
+.stick {
+  position: absolute; left: calc(24px + var(--safe-l)); bottom: calc(22px + var(--safe-b));
+  width: 132px; height: 132px; border-radius: 50%; display: grid; place-items: center;
+  background: radial-gradient(circle, rgba(255,255,255,.05) 0 30%, rgba(14,22,44,.5) 70%);
+  border: 2px solid rgba(255,255,255,.22); box-shadow: 0 8px 30px rgba(0,0,0,.25);
+}
+.stick::before, .stick::after { content: ''; position: absolute; background: rgba(255,255,255,.14); }
+.stick::before { width: 2px; top: 14px; bottom: 14px; }
+.stick::after { height: 2px; left: 14px; right: 14px; }
+.knob {
+  position: relative; z-index: 1; width: 58px; height: 58px; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle at 35% 30%, #ffe29a, var(--gold) 55%, var(--gold-deep));
+  box-shadow: 0 4px 14px rgba(0,0,0,.45); transition: transform .15s ease-out;
+}
+.stick.active { border-color: var(--gold); }
+.stick.active .knob { transition: none; }
+
+.t-thr {
+  position: absolute; right: calc(16px + var(--safe-r)); bottom: calc(22px + var(--safe-b));
+  width: 46px; height: 150px; border-radius: 23px; overflow: hidden;
+  background: var(--glass); border: 1px solid var(--line); box-shadow: 0 8px 30px rgba(0,0,0,.25);
+}
+#t-thr-fill { position: absolute; left: 0; right: 0; bottom: 0; height: 25%; background: linear-gradient(to top, var(--gold-deep), var(--gold)); }
+.t-thr small {
+  position: absolute; left: 0; right: 0; top: 9px; text-align: center; pointer-events: none;
+  font: 700 10px var(--font-mono); letter-spacing: .08em; text-transform: uppercase; text-shadow: 0 1px 3px rgba(0,0,0,.8);
+}
+
+.actions {
+  position: absolute; right: calc(74px + var(--safe-r)); bottom: calc(18px + var(--safe-b));
+  display: grid; grid-template-areas: "small small" "bark zoom"; gap: 10px; align-items: end; justify-items: end;
+}
+.t-small { grid-area: small; display: flex; gap: 8px; }
+#t-bark { grid-area: bark; }
+#t-zoom { grid-area: zoom; }
+.t-btn {
+  position: relative; isolation: isolate; overflow: hidden; padding: 0;
+  width: 60px; height: 60px; border-radius: 50%; display: grid; place-content: center; justify-items: center;
+  background: var(--glass); border: 1px solid var(--line); color: var(--text);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); box-shadow: 0 6px 20px rgba(0,0,0,.3);
+  font-size: 24px; line-height: 1;
+}
+.t-btn small { margin-top: 2px; font: 700 9px var(--font-ui); letter-spacing: .06em; text-transform: uppercase; }
+.t-btn b { font: 700 14px var(--font-brand); }
+.t-btn.big { width: 80px; height: 80px; font-size: 30px; border-color: rgba(255, 122, 89, .55); }
+.t-btn.small { width: 44px; height: 44px; font-size: 18px; }
+.t-btn:active, .t-btn.held { background: rgba(242, 179, 61, .35); border-color: var(--gold); }
+#t-zoom-fill { position: absolute; z-index: -1; left: 0; right: 0; bottom: 0; background: linear-gradient(to top, rgba(255,122,89,.55), rgba(242,179,61,.3)); }
+#t-zoom.active { box-shadow: 0 0 20px rgba(255, 122, 89, .9); }
+
+/* A slimmer HUD that leaves the bottom of the screen to the thumbs */
+body.touch .top-left { top: calc(10px + var(--safe-t)); left: calc(12px + var(--safe-l)); padding: 7px 11px; }
+body.touch .brand { font-size: 15px; }
+body.touch .coords { display: none; }
+body.touch .top-center { top: calc(8px + var(--safe-t)); }
+body.touch #compass { width: 200px; height: 34px; }
+body.touch .top-right { top: calc(10px + var(--safe-t)); right: calc(12px + var(--safe-r)); width: auto; }
+body.touch .search { display: none; width: min(320px, calc(100vw - 24px)); }
+body.touch .search-open .search { display: block; }
+body.touch .results { width: min(320px, calc(100vw - 24px)); max-height: 45dvh; }
+body.touch .search input { font-size: 16px; } /* 16px stops iPhones zooming in */
+body.touch .instruments {
+  top: calc(62px + var(--safe-t)); left: calc(12px + var(--safe-l)); bottom: auto;
+  padding: 6px 12px; transform: none;
+}
+body.touch #attitude, body.touch #spd-kt, body.touch #agl, body.touch .readout:last-child { display: none; }
+body.touch .readouts { display: flex; gap: 14px; min-width: 0; }
+body.touch .readout label { font-size: 9px; }
+body.touch .big { font-size: 18px; }
+body.touch .gauges {
+  top: calc(62px + var(--safe-t)); right: calc(12px + var(--safe-r)); bottom: auto;
+  min-width: 0; padding: 6px 12px; transform: none;
+}
+body.touch .gauges .bars { display: none; }
+body.touch .ball-icon { width: 22px; height: 22px; }
+body.touch #toast { top: calc(116px + var(--safe-t)); }
+body.touch #paused { padding-top: calc(120px + var(--safe-t)); }
+#paused .card-sm { pointer-events: auto; cursor: pointer; }
+body.touch .panel {
+  top: calc(58px + var(--safe-t)); right: calc(12px + var(--safe-r)); width: min(380px, calc(100vw - 24px));
+  max-height: calc(100dvh - 76px - var(--safe-t) - var(--safe-b));
+}
+body.touch .icon { width: 40px; height: 40px; }
+/* Map credits tuck in under the stick */
+body.touch .cesium-viewer-bottom { right: auto; left: calc(4px + var(--safe-l)) !important; bottom: var(--safe-b) !important; transform: scale(.7); transform-origin: bottom left; }
+
+/* Held upright: no brand, and the compass drops below the readouts */
+@media (max-width: 600px) {
+  body.touch .brand { display: none; }
+  body.touch .sub { margin-top: 0; }
+  body.touch .top-left { padding: 6px 10px; }
+  body.touch .buttons { gap: 6px; }
+  body.touch .icon { width: 36px; height: 36px; font-size: 16px; }
+  body.touch .top-center { top: calc(112px + var(--safe-t)); }
+  body.touch #compass { width: 180px; }
+  body.touch #toast { top: calc(170px + var(--safe-t)); max-width: calc(100vw - 32px); }
+  body.touch #paused { padding-top: calc(210px + var(--safe-t)); }
+  .stick { left: calc(16px + var(--safe-l)); width: 120px; height: 120px; }
+  .actions { right: calc(66px + var(--safe-r)); }
+  .t-thr { right: calc(10px + var(--safe-r)); }
+}
+
+/* Short screens (phones held sideways): a more compact boarding pass */
+@media (max-height: 500px) {
+  .pass-main { padding: 14px 20px; }
+  .pilot-pick { margin-top: 10px; }
+  .pilot-pick button { padding: 6px 10px; }
+  .pilot-pick button span { font-size: 22px; }
+  .route { margin: 8px 0; }
+  .route strong { font-size: 30px; }
+  .pass-grid { padding: 8px 0; gap: 6px 14px; }
+  .pass-grid strong { font-size: 13px; }
+  .board { padding: 10px; }
+  .hint { margin: 2px 0 8px; padding: 6px 8px; font-size: 11px; }
+  .pass-stub { padding: 14px 16px; }
+  .pass-stub ul { gap: 6px; font-size: 12px; }
+  .barcode { display: none; }
+}

@@ -145,9 +145,10 @@ export class Hud {
   }
 
   update(now, f, att, info) {
-    if (!this.attC.w || !this.tapeC.w) return; // HUD not shown yet
-    this.drawAttitude(att.pitch, att.roll);
-    this.drawCompass(att.heading, info.ballBearing);
+    if (!this.attC.w && !this.tapeC.w) return; // HUD not shown yet
+    // Phones hide the attitude ball, and the compass when held upright
+    if (this.attC.w) this.drawAttitude(att.pitch, att.roll);
+    if (this.tapeC.w) this.drawCompass(att.heading, info.ballBearing);
     if (now - this.lastText < 100) return;
     this.lastText = now;
     const kmh = f.speed * 3.6;
@@ -161,6 +162,10 @@ export class Hud {
     $('thr').textContent = `${Math.round(f.throttle * 100)}%`;
     $('zoom-fill').style.width = `${f.zoomies * 100}%`;
     $('zoomies').classList.toggle('active', f.boosting);
+    // The touch controls' own throttle and zoomies gauges
+    $('t-thr-fill').style.height = `${f.throttle * 100}%`;
+    $('t-zoom-fill').style.height = `${f.zoomies * 100}%`;
+    $('t-zoom').classList.toggle('active', f.boosting);
     $('status').textContent = info.status;
     $('coords').textContent = info.coords;
     $('ball-dist').textContent = info.ballText;
